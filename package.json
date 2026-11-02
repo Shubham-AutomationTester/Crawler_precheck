@@ -1,0 +1,12 @@
+{
+  "name": "searchstax-crawler-precheck-qa",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Deterministic HTTP timeout and fallback scenarios for STUDIO-6210 crawler pre-check validation",
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "start": "node server.mjs",
+    "test": "node --test tests/smoke.mjs"
+  }
+}

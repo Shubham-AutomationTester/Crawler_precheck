@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Crawler pre-check timeout and fallback testing with isolated URLs and server-side request monitoring.">
+  <title>Crawler Pre-check QA Lab | STUDIO-6210</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/styles.css">
+  <script src="/dashboard.js" type="module"></script>
+</head>
+<body>
+  <div class="shell">
+    <header class="topbar">
+      <a class="brand" href="/dashboard" aria-label="Crawler QA dashboard"><span class="logo">↻</span><span>SearchStax <strong>QA Lab</strong></span></a>
+      <span class="pill"><span class="dot"></span> Crawler regression fixture</span>
+    </header>
+    <main>
+      <section class="hero">
+        <div>
+          <div class="eyebrow">STUDIO-6210 · PRE-CHECK RELIABILITY</div>
+          <h1>Crawler pre-check<br><em>timeout &amp; retry</em> testing</h1>
+          <p class="lede">Generate an isolated Start URL that intentionally responds slowly or returns an HTTP error. Run your SearchStax crawler against it and inspect the exact requests received.</p>
+          <div class="hero-actions"><a class="primary-link" href="#scenarios">Choose a scenario <span aria-hidden="true">→</span></a><a class="secondary-link" href="#how-to">How to test</a></div>
+        </div>
+        <div class="timeline-card" aria-label="Expected pre-check timings">
+          <h2>Expected fallback sequence</h2>
+          <div class="timeline-row"><span class="timeline-step">01</span><div><strong>First request</strong><small>Timeout after up to 10 seconds</small></div><span class="time">10s</span></div>
+          <div class="connector"></div>
+          <div class="timeline-row"><span class="timeline-step">02</span><div><strong>Retry delay</strong><small>Only when first request times out</small></div><span class="time">2s</span></div>
+          <div class="connector"></div>
+          <div class="timeline-row"><span class="timeline-step">03</span><div><strong>Fallback request</strong><small>Extended 20-second timeout</small></div><span class="time">20s</span></div>
+          <div class="timeline-note">Both time out? The <strong>same job</strong> should end in Failed, with no additional pre-check attempt.</div>
+        </div>
+      </section>
+      <section id="how-to" class="how-to">
+        <div class="section-kicker">QUICK START</div><h2>Three steps to validate</h2>
+        <div class="how-grid">
+          <div class="how-item"><span class="how-number">1</span><h3>Generate a fresh URL</h3><p>Pick a scenario below and generate its unique run URL. Each scenario starts at request #1.</p></div>
+          <div class="how-item"><span class="how-number">2</span><h3>Use it as Start URL</h3><p>Paste the URL in SearchStax crawler settings and start the job. Do not open the test URL in your browser first.</p></div>
+          <div class="how-item"><span class="how-number">3</span><h3>Verify both systems</h3><p>Review requests below, then confirm timeout, 2-second wait, retry result, logs and job state in SearchStax.</p></div>
+        </div>
+      </section>
+      <section id="scenarios" class="scenarios">
+        <div class="section-top"><div><div class="section-kicker">CONTROLLED TEST CASES</div><h2>Choose the behavior</h2><p class="muted">All values are intentional server response delays, not simulated frontend timers.</p></div><span class="count" id="scenarioCount">Loading cases…</span></div>
+        <div class="tabset" id="tabs" aria-label="Filter scenarios"><button class="active" data-filter="All" type="button">All scenarios</button><button data-filter="Core" type="button">Core</button><button data-filter="Regression" type="button">Regression</button><button data-filter="Boundary" type="button">Boundary</button></div>
+        <div class="scenario-grid" id="scenarioGrid" aria-live="polite"><p>Loading scenarios…</p></div>
+      </section>
+      <section id="monitor" class="monitor">
+        <div class="section-kicker">LIVE RUN MONITOR</div><div class="monitor-top"><div><h2>Your active test URL</h2><p class="muted">Generating a new URL resets the request sequence without affecting other runs.</p></div><span id="runStatus" class="status">No active run</span></div>
+        <div id="noSelection" class="empty-state"><span aria-hidden="true">↗</span><p>Select <strong>Generate URL</strong> on a scenario to start monitoring.</p></div>
+        <div id="selection" hidden>
+          <div class="url-box"><label for="testUrl">Crawler Start URL</label><div class="url-controls"><input id="testUrl" type="text" readonly aria-label="Crawler Start URL"><button id="copyUrl" type="button" class="button-primary">Copy URL</button></div><small id="selectedScenario" class="selected-info"></small></div>
+          <div class="run-controls"><button id="newRun" class="button-outline" type="button">Generate fresh run</button><button id="refresh" class="button-outline" type="button">Refresh observations</button><button id="resetRun" class="button-danger" type="button">Reset this run</button><a id="rawJson" href="#" target="_blank" rel="noopener">View raw JSON ↗</a></div>
+          <div class="stats"><div><span>Requests received</span><strong id="requestCount">0</strong></div><div><span>Last server observation</span><strong id="lastResult">—</strong></div><div><span>Run identifier</span><code id="runToken">—</code></div></div>
+          <div class="table-container"><table><thead><tr><th>Request</th><th>Method</th><th>Planned delay</th><th>HTTP status</th><th>Server observation</th><th>Elapsed</th></tr></thead><tbody id="observations"><tr><td colspan="6" class="placeholder">No requests yet. Start a crawler job using the URL above.</td></tr></tbody></table></div>
+        </div>
+        <div class="callout"><strong>Important:</strong> A <code>client_disconnected</code> event shows that the caller ended the connection before the server responded. It does not prove the caller timed out. Validate the 10s/2s/20s policy and final job state in the crawler application logs. Cold starts and network overhead can affect boundary timing.</div>
+      </section>
+    </main>
+    <footer><span>Crawler Pre-check QA Lab · STUDIO-6210</span><span>Built for deterministic QA testing · <a href="https://searchstax.atlassian.net/browse/STUDIO-6210" target="_blank" rel="noopener">Jira ticket ↗</a></span></footer>
+  </div>
+</body>
+</html>
