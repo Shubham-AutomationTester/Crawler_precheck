@@ -15,16 +15,18 @@ const MAX_RUNS = 1200;
 const runs = new Map();
 
 // Test plans are HTTP requests in arrival order, NOT the crawler's internal retry count.
-// Subsequent requests intentionally return HTTP 200 immediately, making extra attempts visible.
+// Persistent error cases keep their HTTP status on every request (GET and HEAD).
+// Nonpersistent cases revert to fast HTTP 200 after the scripted steps.
 const cases = [
   { id: 'fast-200', title: 'Immediate HTTP 200', group: 'Core', objective: 'Baseline: first pre-check succeeds without fallback.', expectation: 'First attempt succeeds; no 2-second wait or retry; crawl completes.', steps: [{ delayMs: 0, status: 200 }] },
   { id: 'slow-under-10', title: 'Slow but within first timeout', group: 'Core', objective: 'Check a 7-second response completes on the first attempt.', expectation: 'First attempt succeeds within 10 seconds; no fallback; crawl completes.', steps: [{ delayMs: 7000, status: 200 }] },
   { id: 'retry-success', title: 'First timeout, fast recovery', group: 'Core', objective: 'Force a >10-second first response and a fast successful fallback.', expectation: 'Attempt 1 times out at ~10s; wait ~2s; attempt 2 succeeds with a 20s limit; same job crawls.', steps: [{ delayMs: 12000, status: 200 }, { delayMs: 400, status: 200 }] },
   { id: 'retry-slow-success', title: 'First timeout, slow recovery', group: 'Core', objective: 'Validate the fallback really allows more than 10 seconds.', expectation: 'Attempt 1 times out; wait ~2s; attempt 2 completes in ~17s (within 20s); crawl succeeds.', steps: [{ delayMs: 12000, status: 200 }, { delayMs: 17000, status: 200 }] },
   { id: 'retry-both-timeout', title: 'Both attempts exceed timeouts', group: 'Core', objective: 'Force >10-second first response and >20-second fallback response.', expectation: 'Attempts time out at ~10s and ~20s; no third attempt; SAME crawl job is marked Failed.', steps: [{ delayMs: 12000, status: 200 }, { delayMs: 23000, status: 200 }] },
-  { id: 'first-503', title: 'Immediate HTTP 503', group: 'Regression', objective: 'Non-timeout HTTP failure on the first attempt.', expectation: 'Verify the existing HTTP-error policy; a timeout-only fallback should not be introduced for 503.', steps: [{ delayMs: 0, status: 503 }, { delayMs: 0, status: 200 }] },
-  { id: 'retry-503', title: 'Timeout then HTTP 503', group: 'Regression', objective: 'Second attempt responds quickly but with an error.', expectation: 'First attempt times out; second receives HTTP 503; check existing failure semantics; never make a third pre-check.', steps: [{ delayMs: 12000, status: 200 }, { delayMs: 0, status: 503 }] },
-  { id: 'first-404', title: 'Immediate HTTP 404', group: 'Regression', objective: 'Ensure the change does not hide invalid start URLs.', expectation: 'Verify existing 404 handling; no new timeout fallback should be triggered by a fast 404 alone.', steps: [{ delayMs: 0, status: 404 }, { delayMs: 0, status: 200 }] },
+  { id: 'first-503', title: 'Persistent HTTP 503', group: 'Regression', objective: 'Every request (GET or HEAD) returns immediate HTTP 503, including repeated pre-checks.', expectation: 'All requests return HTTP 503. Verify existing HTTP-error handling without confusing a non-timeout failure with a timeout.', persistent: true, steps: [{ delayMs: 0, status: 503 }] },
+  { id: 'transient-503', title: 'Transient HTTP 503 then 200', group: 'Regression', objective: 'A first request returns 503, then subsequent requests recover to 200.', expectation: 'First request is 503; next is 200. Confirm any retry follows existing non-timeout HTTP-error policy.', steps: [{ delayMs: 0, status: 503 }, { delayMs: 0, status: 200 }] },
+  { id: 'retry-503', title: 'Timeout then persistent HTTP 503', group: 'Regression', objective: 'First request delays past 10s; second and any later requests return HTTP 503.', expectation: 'First attempt times out; second receives 503. Check existing failure semantics; no third pre-check. Repeated requests remain 503.', persistent: true, steps: [{ delayMs: 12000, status: 200 }, { delayMs: 0, status: 503 }] },
+  { id: 'first-404', title: 'Persistent HTTP 404', group: 'Regression', objective: 'Every request (GET or HEAD) returns immediate HTTP 404.', expectation: 'Verify existing invalid Start URL handling; no timeout-only fallback triggered by 404.', persistent: true, steps: [{ delayMs: 0, status: 404 }] },
   { id: 'redirect-302', title: 'Immediate HTTP 302 redirect', group: 'Regression', objective: 'Verify the existing redirect behavior is preserved.', expectation: 'Redirect handling follows existing crawler policy; do not mistake the redirect for a timeout.', steps: [{ delayMs: 0, status: 302 }] },
   { id: 'first-boundary-9-5', title: '9.5-second first response', group: 'Boundary', objective: 'Probe response timing near the first 10-second limit.', expectation: 'Boundary is transport-sensitive; inspect measured duration and whether the fallback ran.', steps: [{ delayMs: 9500, status: 200 }] },
   { id: 'second-boundary-19-5', title: '19.5-second fallback response', group: 'Boundary', objective: 'Probe response timing near the second 20-second limit.', expectation: 'Boundary is transport-sensitive; inspect actual request duration and timeout handling.', steps: [{ delayMs: 12000, status: 200 }, { delayMs: 19500, status: 200 }] },
@@ -108,8 +110,9 @@ function applyScenario(req, res, c, run) {
   const state = getRun(c.id, run);
   const n = state.events.length + 1;
   const step = c.steps[Math.min(n - 1, c.steps.length - 1)];
-  // After the scripted pre-check requests, default to a fast successful page.
-  const actualStep = n > c.steps.length ? { delayMs: 0, status: 200 } : step;
+  // After scripted steps, preserve the final status for persistent errors.
+  // Other scenarios transition to fast HTTP 200 for subsequent content fetches.
+  const actualStep = n > c.steps.length && !c.persistent ? { delayMs: 0, status: 200 } : step;
   const delayMs = Math.round(actualStep.delayMs * DELAY_SCALE);
   const timerStart = performance.now();
   const entry = {
